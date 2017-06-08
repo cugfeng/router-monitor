@@ -56,7 +56,7 @@ def internet_on():
         return False
 
 def reboot_router(host, username, password):
-    g_logger.info("Reboot router")
+    g_logger.info("Reboot router...")
     child = pexpect.spawn("telnet {}".format(host))
     child.expect(".*login:")
     child.sendline(username)
@@ -65,6 +65,7 @@ def reboot_router(host, username, password):
     child.expect(".*#")
     child.sendline("reboot")
     child.expect(pexpect.EOF)
+    g_logger.info("Reboot router done")
 
 def main():
     dir_path = os.path.dirname(os.path.realpath(__file__))
