@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
-import os
+import sys
+import json
 import time
 import random
 import urllib2
+import pexpect
+import os, os.path
 import logging
 import logging.config
-import RPi.GPIO as GPIO
 
 g_urls = [
         "http://www.qq.com/",
@@ -21,8 +23,27 @@ g_urls = [
         "http://www.iqiyi.com/",
         "http://www.youku.com/",
         ]
-g_port = 17
 g_logger = None
+
+def gen_json(json_path):
+    data = {
+        "host": "x.x.x.x",
+        "username": "xxxxxx",
+        "password": "xxxxxx"
+    }
+
+    with open(json_path, "w") as outfile:
+        json.dump(data, outfile, sort_keys=True, indent=4)
+    g_logger.info("Please set host/username/password in {}".format(json_path))
+
+def parse_json(json_path):
+    with open(json_path) as infile:
+        data = json.load(infile)
+        g_logger.debug("Host    : {}".format(data["host"]))
+        g_logger.debug("Username: {}".format(data["username"]))
+        g_logger.debug("Password: {}".format(data["password"]))
+
+    return (data["host"], data["username"], data["password"])
 
 def internet_on():
     try:
@@ -34,31 +55,29 @@ def internet_on():
         g_logger.debug(e)
         return False
 
-def gpio_set_output(is_high):
-    if is_high:
-        g_logger.debug("GPIO {} output high".format(g_port))
-        GPIO.output(g_port, GPIO.HIGH)
-    else:
-        g_logger.debug("GPIO {} output low".format(g_port))
-        GPIO.output(g_port, GPIO.LOW)
-
-def reset_router():
-    g_logger.info("Power off router")
-    gpio_set_output(True)
-    time.sleep(10)
-    g_logger.info("Power on router")
-    gpio_set_output(False)
-    time.sleep(20)
+def reboot_router(host, username, password):
+    g_logger.info("Reboot router")
+    child = pexpect.spawn("telnet {}".format(host))
+    child.expect(".*login:")
+    child.sendline(username)
+    child.expect("Password:")
+    child.sendline(password)
+    child.expect(".*#")
+    child.sendline("reboot")
+    child.expect(pexpect.EOF)
 
 def main():
-    global g_logger
     dir_path = os.path.dirname(os.path.realpath(__file__))
+
+    global g_logger
     logging.config.fileConfig(os.path.join(dir_path, "logging.conf"))
     g_logger = logging.getLogger("root")
 
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
-    GPIO.setup(g_port, GPIO.OUT, initial=GPIO.LOW)
+    json_path = os.path.join(dir_path, "secret.json")
+    if not os.path.exists(json_path):
+        gen_json(json_path)
+        sys.exit(0)
+    host, username, password = parse_json(json_path)
 
     fail_count = 0
     while True:
@@ -69,7 +88,8 @@ def main():
         if not is_on:
             fail_count += 1
             if fail_count >= 10:
-                reset_router()
+                reboot_router(host, username, password)
+                fail_count = 0
         else:
             fail_count = 0
         time.sleep(30)
