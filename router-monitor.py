@@ -58,14 +58,21 @@ def internet_on():
 def reboot_router(host, username, password):
     g_logger.info("Reboot router...")
     child = pexpect.spawn("telnet {}".format(host))
-    child.expect(".*login:")
-    child.sendline(username)
-    child.expect("Password:")
-    child.sendline(password)
-    child.expect(".*#")
-    child.sendline("reboot")
-    child.expect(pexpect.EOF)
-    g_logger.info("Reboot router done")
+    i = child.expect(["login:", "Unable to connect to remote host:"])
+    g_logger.debug("{}{}".format(child.before, child.after))
+    if i == 0:
+        child.sendline(username)
+        child.expect("Password:")
+        g_logger.debug("{}{}".format(child.before, child.after))
+        child.sendline(password)
+        child.expect(".*#")
+        g_logger.debug("{}{}".format(child.before, child.after))
+        child.sendline("reboot")
+        child.expect(pexpect.EOF)
+        g_logger.debug("{}{}".format(child.before, child.after))
+        g_logger.info("Reboot router done")
+    elif i == 1:
+        g_logger.info("Cannot connect to router")
 
 def main():
     dir_path = os.path.dirname(os.path.realpath(__file__))
